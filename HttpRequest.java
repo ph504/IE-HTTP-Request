@@ -66,10 +66,23 @@ public class HttpRequest {
     }
 
     public void setBody(HashMap<String, String> body) {
-        this.body = body;
+        if(!httpRequestMethod.equals(HttpRequestMethod.GET)) // GET has no body that's why i put this if here.
+            this.body = body;
+
     }
 
     public HttpResponse request() throws HttpException, IOException {
         // TODO
+        String jsonBody = toJSON();
+    }
+
+    private String toJSON(){
+        StringBuilder requestBody = new StringBuilder("{");
+        for(String jsonElement:body.keySet()){
+            requestBody.append("\n"+jsonElement);
+            requestBody.append(":"+body.get(jsonElement));            
+        }
+        requestBody.append("\n}");
+        return requestBody.toString();
     }
 }
