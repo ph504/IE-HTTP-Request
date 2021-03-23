@@ -2,6 +2,8 @@ package main;
 
 import java.io.*;
 import java.net.*;
+import java.nio.charset.CharsetEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -13,7 +15,7 @@ public class HttpRequest {
     private HashMap<String, String> params;
     private HashMap<String, String> body;
 
-    private static final String CLRF = "\r\n";
+    private static final String CRLF = "\r\n"; // carriage return.
 
     public HttpRequest(String url) {
         this(url, HttpRequestMethod.GET, new HashMap<>(), new HashMap<>(), new HashMap<>());
@@ -73,33 +75,100 @@ public class HttpRequest {
     }
 
     public HttpResponse request() throws HttpException, IOException {
-        // TODO
 
-        // request line --> general form of : Method<sp>Path<sp>Version<CLRF>
-        httpRequestMethod.toString() + url.
+        HttpURLConnection connection = (HttpURLConnection)new URL(url).openConnection();
+
+        // setting method.
+        connection.setRequestMethod(httpRequestMethod.toString());
+        connection.setDoInput(true);
+
+        // setting headers.
+        Iterator<String> iterator = headers.keySet().iterator();
+        while (iterator.hasNext()) {
+            String header = iterator.next();
+            connection.addRequestProperty(header, headers.get(header));
+        }
+
+        // clearing parameters and body if not necessary.
         clearBody();
+        clearQParams();
 
-        queryParams();
+        connection.setDoOutput(true);
+        DataOutputStream dos = new DataOutputStream(connection.getOutputStream());
+
+        String queryParameters = toQParams();
+        dos.writeBytes(queryParameters);
+
         String jsonBody = toJSON();
+        dos.writeBytes(jsonBody);
 
+        dos.flush();
+        dos.close();
 
+        // fetchig response
+        HttpResponse httpResponse = new HttpResponse(connection.getResponseCode(), connection.getHeaderFields(), setResponseBody(connection));
+        if(httpResponse.getStatus()>=400 && httpResponse.getStatus()<=499){
+            throw new HttpException("Error is from client-side", httpResponse);
+        }
+        else if(httpResponse.getStatus()>=500 && httpResponse.getStatus()<=599){
+            throw new HttpException("Error is from server-side", httpResponse);
+        }
 
+        return httpResponse;
+
+    }
+
+    private String setResponseBody(HttpURLConnection connection) throws IOException {
+        String msgLine;
+        StringBuilder responseMassage = new StringBuilder();
+        try(BufferedReader br = new BufferedReader(
+                new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+
+            while ((msgLine = br.readLine()) != null) {
+
+                responseMassage.append(msgLine.trim());
+                responseMassage.append(CRLF);
+            }
+
+        }
+        return responseMassage.toString();
+    }
+
+    private String toQParams() throws UnsupportedEncodingException {
+        StringBuilder queryParams = new StringBuilder();
+        Iterator<String> iterator = params.keySet().iterator();
+        String key = null;
+        if(iterator.hasNext()){
+            key = iterator.next();
+            queryParams.append(URLEncoder.encode(key, StandardCharsets.UTF_8.toString()));
+            queryParams.append("=");
+            queryParams.append(URLEncoder.encode(params.get(key), StandardCharsets.UTF_8.toString()));
+        }
+        while(iterator.hasNext()) {
+            key = iterator.next();
+            queryParams.append("&");
+            queryParams.append(URLEncoder.encode(key, StandardCharsets.UTF_8.toString()));
+            queryParams.append("=");
+            queryParams.append(URLEncoder.encode(params.get(key), StandardCharsets.UTF_8.toString()));
+
+        }
+        return queryParams.toString();
     }
 
     private String toJSON(){
         StringBuilder requestBody = new StringBuilder("{");
         Iterator<String> iterator = body.keySet().iterator();
         if(iterator.hasNext())
-            requestBody.append(CLRF + iterator.next());
+            requestBody.append(CRLF + iterator.next());
         while (iterator.hasNext()){
             String jsonElement = iterator.next();
-            requestBody.append(requestBody.append("," + CLRF)
+            requestBody.append(requestBody.append("," + CRLF)
                     .append(jsonElement));
 
             requestBody.append(requestBody.append(":")
                     .append(body.get(jsonElement)));
         }
-        requestBody.append(CLRF + "}");
+        requestBody.append(CRLF + "}");
         return requestBody.toString();
     }
 
@@ -109,7 +178,7 @@ public class HttpRequest {
         // else nothing.
     }
 
-    private void queryParams(){
+    private void clearQParams(){
         // for the get method.
 
         if(!httpRequestMethod.equals(HttpRequestMethod.GET))
