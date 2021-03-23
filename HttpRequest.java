@@ -106,13 +106,15 @@ public class HttpRequest {
         dos.close();
 
         // fetchig response
+        int responseStatus = connection.getResponseCode();
+        if(responseStatus>=400 && responseStatus<=499){
+            throw new HttpException("Error 400s family is from client-side", new HttpResponse(connection.getResponseCode(), connection.getHeaderFields(), ""));
+        }
+        else if(responseStatus>=500 && responseStatus<=599){
+            throw new HttpException("Error 500s family is from server-side", new HttpResponse(connection.getResponseCode(), connection.getHeaderFields(), ""));
+        }
         HttpResponse httpResponse = new HttpResponse(connection.getResponseCode(), connection.getHeaderFields(), setResponseBody(connection));
-        if(httpResponse.getStatus()>=400 && httpResponse.getStatus()<=499){
-            throw new HttpException("Error is from client-side", httpResponse);
-        }
-        else if(httpResponse.getStatus()>=500 && httpResponse.getStatus()<=599){
-            throw new HttpException("Error is from server-side", httpResponse);
-        }
+
 
         return httpResponse;
 
